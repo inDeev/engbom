@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import {computed, onMounted, onUnmounted, ref} from "vue";
+import {computed, nextTick, onMounted, onUnmounted, ref} from "vue";
 import router from "../../router.js";
 import {useRoute} from "vue-router";
 import NavbarItem from "./NavbarItem.vue";
@@ -16,8 +16,15 @@ const props = defineProps<{
 
 const route = useRoute();
 
+const mobileBreakpoint = props.navbarConfig?.mobileBreakpoint ?? 640;
+
 // Navbar state
-const navbarExpanded = ref<boolean>(localStorage.getItem('navbar_is_expanded') === 'true' || false);
+const isMobileInit = window.innerWidth < mobileBreakpoint;
+const navbarExpanded = ref<boolean>(
+    isMobileInit
+        ? false                        // always collapsed on mobile at load
+        : localStorage.getItem('navbar_is_expanded') === 'true'
+);
 const submenuExpanded = ref<Record<string, boolean>>({});
 const tooltip = ref<{ visible: boolean, text: string, styles: any, arrowPosition: 'left' | 'right' | 'center' }>({visible: false, text: '', styles: {}, arrowPosition: 'center'});
 const popup = ref<{ visible: boolean, items: Item[], styles: any }>({visible: false, items: [], styles: {}});
@@ -34,7 +41,6 @@ const itemHoverTextColor = props.navbarConfig?.colors?.itemHoverText ?? '#c1c6cd
 const primaryColor = props.navbarConfig?.colors?.navbarBackgroundFrom ?? '#452750';
 const secondaryColor = props.navbarConfig?.colors?.navbarBackgroundTo ?? '#2F1937';
 const iconSize = props.navbarConfig?.iconSize ?? 'xl'; // Tailwind JIT safelist: 'text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl', 'text-5xl', 'text-6xl', 'text-7xl', 'text-8xl', 'text-9xl'
-const mobileBreakpoint = props.navbarConfig?.mobileBreakpoint ?? 640;
 
 // Helper function to check if an item (or its children) is active
 const isActive = (item: Item): boolean => {
@@ -76,7 +82,7 @@ const iconMenuItems = computed(() => addComputedValues(props.menuItems.iconMenu 
 const iconUserItems = computed(() => addComputedValues(props.menuItems.iconUser ?? []));
 
 // Toggle navbar size
-function toggleNavbarExpansion(newState: boolean | null = null) {
+function toggleNavbarExpansion(newState: boolean | null = null, byResize: boolean = false) {
   navbarExpanded.value = newState ?? !navbarExpanded.value;
   if (navbarExpanded.value === false) {
     submenuExpanded.value = {};
@@ -94,16 +100,18 @@ function toggleNavbarExpansion(newState: boolean | null = null) {
       }
     });
   }
-  localStorage.setItem('navbar_is_expanded', navbarExpanded.value.toString());
+  if (!byResize) {
+    localStorage.setItem('navbar_is_expanded', navbarExpanded.value.toString());
+  }
 }
 
 // Toggle submenu visibility for expanded navbar
 const toggleSubmenuExpand = (groupAndIndex: string) => {
-  submenuExpanded.value[groupAndIndex] = !submenuExpanded.value[groupAndIndex]
+  submenuExpanded.value[groupAndIndex] = !submenuExpanded.value[groupAndIndex];
 }
 
 // Handle item click
-const handleClick = (item: Item, groupAndIndex: string, event: MouseEvent) => {
+const handleClick = async (item: Item, groupAndIndex: string, event: MouseEvent) => {
   if (item.children && !item.to && navbarExpanded.value) {
     // Expand submenu when navbar is expanded
     toggleSubmenuExpand(groupAndIndex)
@@ -115,6 +123,9 @@ const handleClick = (item: Item, groupAndIndex: string, event: MouseEvent) => {
     // Navigate if `to` param exists
     router.push(item.to)
   }
+
+  await nextTick();
+  checkScrollbar();
 }
 
 // Handle submenu item click
@@ -213,32 +224,55 @@ let timeout: NodeJS.Timeout;
 const handleResize = () => {
   clearTimeout(timeout);
   timeout = setTimeout(() => {
-    if (window.innerWidth < mobileBreakpoint) {
-      toggleNavbarExpansion(false);
+    const isMobile = window.innerWidth < mobileBreakpoint;
+    if (isMobile) {
+      toggleNavbarExpansion(false, true);
       submenuExpanded.value = {};
+    } else {
+      // Restore expansion based on saved preference when leaving mobile mode
+      const saved = localStorage.getItem('navbar_is_expanded') === 'true';
+      toggleNavbarExpansion(saved, true);
     }
   }, 200); // Delay in milliseconds
 };
+
+function checkScrollbar() {
+  console.log("Toggling scrollbar shadows");
+  const nav = document.getElementById("floating-nav");
+  const shadow = document.getElementsByClassName("nav-shadow");
+  console.log(nav.scrollHeight, nav.clientHeight);
+  if (nav.scrollHeight > nav.clientHeight || (window.innerWidth < mobileBreakpoint && nav.scrollWidth > nav.clientWidth)) {
+    Array.from(shadow).forEach(element => element.classList.add("opacity-100"));
+  } else {
+    Array.from(shadow).forEach(element => element.classList.remove("opacity-100"));
+  }
+}
 
 // Attach and detach event listeners
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   document.addEventListener('click', handleClickOutside);
+  checkScrollbar();
+  window.addEventListener("resize", checkScrollbar);
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('click', handleClickOutside);
 });
+
+
+// Run on load and when window resizes
+
 </script>
 
 <template>
-  <div id="navbar" class="w-full sm:h-screen flex flex-row sm:flex-col gap-1 sm:gap-4 items-center py-2 sm:py-4 pl-2"
-       :class="[ navbarExpanded ? 'sm:w-56' : 'sm:w-14' ]"
+  <div id="navbar" class="sm:h-screen flex flex-row sm:flex-col gap-1 sm:gap-4 items-center py-2 sm:py-4"
+       :class="[ navbarExpanded ? 'sm:w-64 sm:max-w-64' : 'sm:w-14' ]"
        :style="[ `background: ${primaryColor}`, `background: linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`]">
 
     <!-- Logo section -->
-    <div @click.stop="showMainPopup" id="logo-section" class="min-w-14 sm:w-full pr-2 flex items-center" :class="[navbarExpanded ? 'justify-start' : 'justify-center']">
+    <div @click.stop="showMainPopup" id="logo-section" class="min-w-14 sm:w-full flex items-center" :class="[navbarExpanded ? 'justify-start pl-4' : 'justify-center']">
       <img v-if="site?.logo" :src="site.logo" alt="logo" class="w-full max-w-8 aspect-square"/>
       <svg v-else viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" class="w-full max-w-8 aspect-square">
         <rect y="20" width="250" height="250" style="stroke: rgb(0, 0, 0); fill: rgb(117, 96, 148);" x="20"></rect>
@@ -253,7 +287,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Navigation Items -->
-    <nav class="flex flex-row sm:flex-col gap-2 h-full w-full overflow-y-hidden sm:overflow-y-auto overflow-x-auto sm:overflow-x-hidden scrollbar-gutter-stable scrollbar-thin">
+    <nav id="floating-nav" class="flex flex-row sm:flex-col gap-2 h-full w-full overflow-y-hidden sm:overflow-y-auto overflow-x-auto sm:overflow-x-hidden scrollbar-hidden px-2">
       <div v-for="(item, index) in floatingMenuItems" :key="'floating_' + index" class="relative w-full">
         <div @click="handleClick(item, 'floating_' + index, $event)"
              @mouseenter="navbarExpanded ? () => {} : showTooltip('floating_' + index, $event)"
@@ -275,31 +309,34 @@ onUnmounted(() => {
     </nav>
 
     <!-- Bottom Navigation Items -->
-    <nav class="flex flex-row sm:flex-col gap-2 sm:w-full pr-2">
-      <div v-for="(item, index) in fixedMenuItems" :key="'fixed_' + index" class="relative w-full">
-        <div @click="handleClick(item, 'fixed_' + index, $event)"
-             @mouseenter="navbarExpanded ? () => {} : showTooltip('fixed_' + index, $event)"
-             @mouseleave="hideTooltip"
-             class="navbar-button"
-             :style="item.isActive ? `background-color: ${itemActiveBGColor}; color: ${itemActiveTextColor};` : `--hover-bg: ${itemHoverBGColor}; color: ${itemTextColor}; --hover-text: ${itemHoverTextColor};`">
+    <div class="relative sm:w-full">
+      <div class="nav-shadow absolute -top-2 sm:-top-8 -left-4 sm:left-0 w-4 sm:w-full h-[calc(100%+1rem)] sm:h-4 bg-gradient-to-l sm:bg-gradient-to-t from-black/30 to-transparent opacity-0 pointer-events-none transition-opacity duration-300"></div>
+      <nav id="fixed-nav" class="flex flex-row sm:flex-col gap-2 sm:w-full justify-center px-2">
+        <div v-for="(item, index) in fixedMenuItems" :key="'fixed_' + index" class="relative w-full">
+          <div @click="handleClick(item, 'fixed_' + index, $event)"
+               @mouseenter="navbarExpanded ? () => {} : showTooltip('fixed_' + index, $event)"
+               @mouseleave="hideTooltip"
+               class="navbar-button"
+               :style="item.isActive ? `background-color: ${itemActiveBGColor}; color: ${itemActiveTextColor};` : `--hover-bg: ${itemHoverBGColor}; color: ${itemTextColor}; --hover-text: ${itemHoverTextColor};`">
 
-          <!-- Icon and Title -->
-          <NavbarItem :navbar-expanded="navbarExpanded" :item="item" :icon-size="iconSize"/>
+            <!-- Icon and Title -->
+            <NavbarItem :navbar-expanded="navbarExpanded" :item="item" :icon-size="iconSize"/>
+
+          </div>
+
+          <!-- Submenu -->
+          <NavbarSubmenu v-if="item.children && submenuExpanded['fixed_' + index]"
+                         :children="item.children" :active-color="itemActiveBGColor" :icon-size="iconSize"
+                         @submenu-clicked="handleSubmenuClick"/>
 
         </div>
-
-        <!-- Submenu -->
-        <NavbarSubmenu v-if="item.children && submenuExpanded['fixed_' + index]"
-                       :children="item.children" :active-color="itemActiveBGColor" :icon-size="iconSize"
-                       @submenu-clicked="handleSubmenuClick"/>
-
-      </div>
-    </nav>
+      </nav>
+    </div>
 
     <!-- Expand/Collapse Button -->
-    <nav class="hidden sm:flex flex-row sm:flex-col space-y-2 w-full xs:pb-2 sm:pr-2">
+    <nav id="collapse-nav" class="hidden sm:flex flex-row sm:flex-col space-y-2 w-full xs:pb-2 px-2">
       <div class="relative w-full">
-        <div @click="toggleNavbarExpansion(null)"
+        <div @click="toggleNavbarExpansion(null, false)"
              @mouseenter="navbarExpanded ? () => {} : showTooltip('expandToggle', $event)"
              @mouseleave="navbarExpanded ? () => {} : hideTooltip"
              class="navbar-button"
@@ -431,6 +468,10 @@ onUnmounted(() => {
   scrollbar-width: thin;
 }
 
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
 .scrollbar-gutter-stable {
   scrollbar-gutter: stable;
 }
@@ -457,7 +498,7 @@ onUnmounted(() => {
 }
 
 .navbar-badge {
-  @apply text-xs text-center py-0.5 px-1 min-w-6 mr-1 bg-rose-500 text-white rounded-full;
+  @apply text-xs text-center py-0.5 px-1 min-w-6 my-1 bg-rose-500 text-white rounded-full;
 }
 
 .popup-item {

@@ -39,8 +39,10 @@ const menuItems = {
     {
       icon: 'mdi mdi-domain',
       title: 'Manufacturers',
+      badge: 'auto',
       children: [
         {to: '/manufacturers/list', title: 'Manufacturer List'},
+        {to: '/manufacturers/list', title: 'Super long manufacturer name that should be truncated in the navbar', badge: 9999},
         {to: '/manufacturers/add', title: 'Add Manufacturer', icon: 'mdi mdi-domain-plus'},
       ],
     },
@@ -118,7 +120,8 @@ const menuItems = {
 
 const navbarConfig = {
   site: {
-    name: 'Engineering Bill of Materials',
+    title: 'Engineering Bill of Materials',
+    subtitle: 'SK 38x',
     logo: indeevCubeLogo,
   },
   user: {
