@@ -17,11 +17,11 @@ const handleSubmenuClick = (child: Item) => {
 </script>
 
 <template>
-  <div class="ml-4 mt-1 space-y-1">
+  <div class="mt-1 space-y-1">
     <div v-for="(child, childIndex) in props.children"
-         :key="'submenu' + childIndex">
+         :key="'submenu' + childIndex" class="pl-4 max-w-[12.7rem]">
       <div @click="handleSubmenuClick(child)"
-           class="navbar-button w-full text-left rounded-md flex items-center justify-between gap-2 px-2"
+           class="text-sm tracking-tight navbar-button w-full text-left rounded-md flex items-center justify-between gap-2 px-2"
            :class="child.isActive ? 'text-white' : 'hover:bg-white/30 text-gray-400'"
            :style="child.isActive ? `background-color: ${props.activeColor}` : ''">
         <div class="truncate">
@@ -39,6 +39,6 @@ const handleSubmenuClick = (child: Item) => {
 
 <style scoped>
 .navbar-badge {
-  @apply text-xs text-center py-0.5 px-1 min-w-6 mr-1 bg-rose-500 text-white rounded-full;
+  @apply text-xs text-center py-0.5 px-1 -mr-2 bg-rose-500 text-white rounded-full;
 }
 </style>

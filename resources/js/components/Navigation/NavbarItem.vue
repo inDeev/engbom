@@ -28,6 +28,6 @@ const props = defineProps<{
 
 <style scoped>
 .navbar-badge {
-  @apply text-xs text-center py-0.5 px-1 min-w-6 mr-1 bg-rose-500 text-white rounded-full;
+  @apply text-xs text-center py-0.5 px-1 min-w-6 ml-2 bg-rose-500 text-white rounded-full;
 }
 </style>
